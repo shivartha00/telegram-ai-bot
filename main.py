@@ -25,26 +25,27 @@ def run_flask():
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
-  try:
-    # সরাসরি উপলব্ধ মডেলগুলোর তালিকা থেকে প্রথমটি অটোমেটিক বেছে নেবে
-    available_models = [
-        m.name
-        for m in client.models.list()
-        if "generateContent" in m.supported_generation_methods
-    ]
+  models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash"]
+  success = False
+  response_text = ""
 
-    target_model = (
-        available_models[0]
-        if available_models
-        else "models/gemini-1.5-flash"
-    )
+  for m in models_to_try:
+    try:
+      response = client.models.generate_content(
+          model=m, contents=message.text
+      )
+      response_text = response.text
+      success = True
+      break
+    except Exception as e:
+      continue
 
-    response = client.models.generate_content(
-        model=target_model, contents=message.text
+  if success:
+    bot.reply_to(message, response_text)
+  else:
+    bot.reply_to(
+        message, "Ekhon server-e beshi load ache. Ektu pore abar try korun!"
     )
-    bot.reply_to(message, response.text)
-  except Exception as e:
-    bot.reply_to(message, f"Error: {str(e)}")
 
 
 if __name__ == "__main__":
