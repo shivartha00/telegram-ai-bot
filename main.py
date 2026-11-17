@@ -1,5 +1,4 @@
 import os
-import os
 import threading
 from flask import Flask
 import requests
@@ -25,7 +24,7 @@ def run_flask():
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
   try:
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     payload = {"contents": [{"parts": [{"text": message.text}]}]}
 
@@ -36,7 +35,18 @@ def handle_message(message):
       reply_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
       bot.reply_to(message, reply_text)
     else:
-      bot.reply_to(message, f"API Error: {res_data}")
+      # যদি প্রথমটা না পায় তবে সরাসরি gemini-2.0-flash দিয়ে ট্রাই করবে
+      url_fallback = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+      response_fb = requests.post(url_fallback, json=payload, headers=headers)
+      res_data_fb = response_fb.json()
+
+      if "candidates" in res_data_fb:
+        reply_text = (
+            res_data_fb["candidates"][0]["content"]["parts"][0]["text"]
+        )
+        bot.reply_to(message, reply_text)
+      else:
+        bot.reply_to(message, f"API Error: {res_data_fb}")
   except Exception as e:
     bot.reply_to(message, f"Error: {str(e)}")
 
