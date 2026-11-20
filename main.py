@@ -47,7 +47,7 @@ def ask_groq(text):
   data = res.json()
   if "choices" in data:
     return data["choices"][0]["message"]["content"]
-  return None
+  return f"Groq Error: {data}"
 
 
 @bot.message_handler(func=lambda message: True)
@@ -70,8 +70,9 @@ def handle_message(message):
     if reply:
       bot.reply_to(message, reply)
       return
-  except Exception:
-    pass
+  except Exception as e:
+    bot.reply_to(message, f"Groq Exception: {e}")
+    return
 
   bot.reply_to(message, "Sob engine ekhon busy ache. Ektu pore abar try korun.")
 
