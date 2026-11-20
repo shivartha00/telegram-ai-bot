@@ -1,5 +1,6 @@
 import os
 import threading
+import time
 from flask import Flask
 import requests
 import telebot
@@ -23,27 +24,38 @@ def run_flask():
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
-  try:
-    # সঠিক v1 ভার্সন এবং gemini-1.5-flash এন্ডপয়েন্ট
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
-    headers = {"Content-Type": "application/json"}
-    payload = {"contents": [{"parts": [{"text": message.text}]}]}
+  url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={GEMINI_API_KEY}"
+  headers = {"Content-Type": "application/json"}
+  payload = {"contents": [{"parts": [{"text": message.text}]}]}
 
-    response = requests.post(url, json=payload, headers=headers)
-    res_data = response.json()
+  # ৫১৩ সার্ভার ওভারলোড এরর এড়াতে ৩ বার ট্রাই করবে
+  for attempt in range(3):
+    try:
+      response = requests.post(url, json=payload, headers=headers)
+      res_data = response.json()
 
-    if "candidates" in res_data:
-      reply_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
-      bot.reply_to(message, reply_text)
-    else:
-      bot.reply_to(message, f"API Error: {res_data}")
-  except Exception as e:
-    bot.reply_to(message, f"Error: {str(e)}")
+      if "candidates" in res_data:
+        reply_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
+        bot.reply_to(message, reply_text)
+        return
+      elif (
+          "error" in res_data
+          and res_data["error"].get("code") == 503
+          and attempt < 2
+      ):
+        time.sleep(2)
+        continue
+      else:
+        bot.reply_to(message, f"API Error: {res_data}")
+        return
+    except Exception as e:
+      if attempt == 2:
+        bot.reply_to(message, f"Error: {str(e)}")
+      time.sleep(2)
 
 
 if __name__ == "__main__":
   t = threading.Thread(target=run_flask)
   t.start()
-
-  print("Telegram AI Bot chalu hoye geche...")
   bot.polling()
+
