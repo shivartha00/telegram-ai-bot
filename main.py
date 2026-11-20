@@ -1,12 +1,12 @@
 import os
 import threading
-import time
 from flask import Flask
 import requests
 import telebot
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 app = Flask(__name__)
@@ -14,7 +14,7 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-  return "Telegram AI Bot is running successfully!"
+  return "Double Engine Bot is running!"
 
 
 def run_flask():
@@ -22,40 +22,61 @@ def run_flask():
   app.run(host="0.0.0.0", port=port)
 
 
+def ask_gemini(model_name, text):
+  url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
+  headers = {"Content-Type": "application/json"}
+  payload = {"contents": [{"parts": [{"text": text}]}]}
+  res = requests.post(url, json=payload, headers=headers, timeout=15)
+  data = res.json()
+  if "candidates" in data:
+    return data["candidates"][0]["content"]["parts"][0]["text"]
+  return None
+
+
+def ask_groq(text):
+  url = "https://api.groq.com/openai/v1/chat/completions"
+  headers = {
+      "Authorization": f"Bearer {GROQ_API_KEY}",
+      "Content-Type": "application/json",
+  }
+  payload = {
+      "model": "llama-3.3-70b-versatile",
+      "messages": [{"role": "user", "content": text}],
+  }
+  res = requests.post(url, json=payload, headers=headers, timeout=15)
+  data = res.json()
+  if "choices" in data:
+    return data["choices"][0]["message"]["content"]
+  return None
+
+
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
-  url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={GEMINI_API_KEY}"
-  headers = {"Content-Type": "application/json"}
-  payload = {"contents": [{"parts": [{"text": message.text}]}]}
+  user_text = message.text
 
-  # ৫১৩ সার্ভার ওভারলোড এরর এড়াতে ৩ বার ট্রাই করবে
-  for attempt in range(3):
+  # First Engine: Gemini Flash + Lite
+  for model in ["gemini-3.8-flash", "gemini-3.8-flash-lite"]:
     try:
-      response = requests.post(url, json=payload, headers=headers)
-      res_data = response.json()
+      reply = ask_gemini(model, user_text)
+      if reply:
+        bot.reply_to(message, reply)
+        return
+    except Exception:
+      continue
 
-      if "candidates" in res_data:
-        reply_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
-        bot.reply_to(message, reply_text)
-        return
-      elif (
-          "error" in res_data
-          and res_data["error"].get("code") == 503
-          and attempt < 2
-      ):
-        time.sleep(2)
-        continue
-      else:
-        bot.reply_to(message, f"API Error: {res_data}")
-        return
-    except Exception as e:
-      if attempt == 2:
-        bot.reply_to(message, f"Error: {str(e)}")
-      time.sleep(2)
+  # Second Engine: Groq API
+  try:
+    reply = ask_groq(user_text)
+    if reply:
+      bot.reply_to(message, reply)
+      return
+  except Exception:
+    pass
+
+  bot.reply_to(message, "Sob engine ekhon busy ache. Ektu pore abar try korun.")
 
 
 if __name__ == "__main__":
   t = threading.Thread(target=run_flask)
   t.start()
   bot.polling()
-
