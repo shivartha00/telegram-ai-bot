@@ -40,7 +40,7 @@ def ask_groq(text):
       "Content-Type": "application/json",
   }
   payload = {
-      "model": "llama-3.3-70b-versatile",
+      "model": "openai/gpt-oss-20b",
       "messages": [{"role": "user", "content": text}],
   }
   res = requests.post(url, json=payload, headers=headers, timeout=15)
